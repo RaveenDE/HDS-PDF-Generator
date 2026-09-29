@@ -1,0 +1,1 @@
+"""WhatsApp invoice worker package."""

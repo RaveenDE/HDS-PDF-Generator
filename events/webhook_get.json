@@ -1,0 +1,23 @@
+{
+  "version": "2.0",
+  "routeKey": "$default",
+  "rawPath": "/",
+  "rawQueryString": "hub.mode=subscribe&hub.verify_token=my-verify-token&hub.challenge=challenge-string-123",
+  "headers": {
+    "content-type": "text/plain"
+  },
+  "queryStringParameters": {
+    "hub.mode": "subscribe",
+    "hub.verify_token": "my-verify-token",
+    "hub.challenge": "challenge-string-123"
+  },
+  "requestContext": {
+    "http": {
+      "method": "GET",
+      "path": "/",
+      "protocol": "HTTP/1.1",
+      "sourceIp": "1.2.3.4"
+    }
+  },
+  "isBase64Encoded": false
+}

@@ -1,0 +1,20 @@
+{
+  "version": "2.0",
+  "routeKey": "$default",
+  "rawPath": "/",
+  "rawQueryString": "",
+  "headers": {
+    "content-type": "application/json",
+    "x-hub-signature-256": "sha256=PLACEHOLDER"
+  },
+  "requestContext": {
+    "http": {
+      "method": "POST",
+      "path": "/",
+      "protocol": "HTTP/1.1",
+      "sourceIp": "1.2.3.4"
+    }
+  },
+  "body": "{\"object\":\"whatsapp_business_account\",\"entry\":[{\"id\":\"WABA_ID\",\"changes\":[{\"value\":{\"messaging_product\":\"whatsapp\",\"metadata\":{\"display_phone_number\":\"15550001111\",\"phone_number_id\":\"PHONE_NUMBER_ID\"},\"contacts\":[{\"profile\":{\"name\":\"Hassan\"},\"wa_id\":\"94771234567\"}],\"messages\":[{\"from\":\"94771234567\",\"id\":\"wamid.TEST123\",\"timestamp\":\"1710000000\",\"type\":\"text\",\"text\":{\"body\":\"Invoice DIMO Elevators, Colombo, attention Mr. Hassan, 6 door jamb installation at 75000, 6 door jamb modification at 9615\"}}]},\"field\":\"messages\"}]}]}",
+  "isBase64Encoded": false
+}

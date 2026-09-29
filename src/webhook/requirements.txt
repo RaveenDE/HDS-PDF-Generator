@@ -1,0 +1,1 @@
+# Webhook uses only boto3 (provided by Lambda runtime) + stdlib.

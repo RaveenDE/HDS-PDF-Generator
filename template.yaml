@@ -1,0 +1,235 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Transform: AWS::Serverless-2016-10-31
+Description: WhatsApp Cloud API invoice PDF generator (webhook -> SQS -> worker)
+
+Parameters:
+  SecretArn:
+    Type: String
+    Description: Secrets Manager ARN for JSON secret (WHATSAPP_TOKEN, APP_SECRET, VERIFY_TOKEN, OPENAI_API_KEY)
+  PhoneNumberId:
+    Type: String
+    Description: WhatsApp Phone Number ID (not the WABA ID)
+  WabaId:
+    Type: String
+    Description: WhatsApp Business Account ID (for Meta subscribed_apps setup)
+  AllowedSenders:
+    Type: String
+    Default: "*"
+    Description: Comma-separated E.164 phone numbers without +. Use * to allow all (dev only).
+  InvoiceStart:
+    Type: Number
+    Default: 2578
+  QuotationStart:
+    Type: Number
+    Default: 26929
+  LlmProvider:
+    Type: String
+    Default: openai
+    AllowedValues:
+      - openai
+      - anthropic
+    Description: LLM vendor for parsing WhatsApp invoice text
+  OpenAIModel:
+    Type: String
+    Default: gpt-4o-mini
+  AnthropicModel:
+    Type: String
+    Default: claude-sonnet-4-20250514
+  GraphApiVersion:
+    Type: String
+    Default: v21.0
+
+Globals:
+  Function:
+    Runtime: python3.12
+    Architectures:
+      - x86_64
+    Timeout: 30
+    MemorySize: 256
+    Tracing: Active
+
+Resources:
+  InvoiceBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault:
+              SSEAlgorithm: AES256
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+      LifecycleConfiguration:
+        Rules:
+          - Id: AbortIncompleteUploads
+            Status: Enabled
+            AbortIncompleteMultipartUpload:
+              DaysAfterInitiation: 1
+
+  InvoiceTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      BillingMode: PAY_PER_REQUEST
+      AttributeDefinitions:
+        - AttributeName: pk
+          AttributeType: S
+        - AttributeName: sk
+          AttributeType: S
+      KeySchema:
+        - AttributeName: pk
+          KeyType: HASH
+        - AttributeName: sk
+          KeyType: RANGE
+      TimeToLiveSpecification:
+        AttributeName: ttl
+        Enabled: true
+
+  WebhookDLQ:
+    Type: AWS::SQS::Queue
+    Properties:
+      MessageRetentionPeriod: 1209600
+
+  WebhookQueue:
+    Type: AWS::SQS::Queue
+    Properties:
+      VisibilityTimeout: 360
+      RedrivePolicy:
+        deadLetterTargetArn: !GetAtt WebhookDLQ.Arn
+        maxReceiveCount: 3
+
+  DlqDepthAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmDescription: WhatsApp invoice worker DLQ has messages
+      Namespace: AWS/SQS
+      MetricName: ApproximateNumberOfMessagesVisible
+      Dimensions:
+        - Name: QueueName
+          Value: !GetAtt WebhookDLQ.QueueName
+      Statistic: Sum
+      Period: 60
+      EvaluationPeriods: 1
+      Threshold: 1
+      ComparisonOperator: GreaterThanOrEqualToThreshold
+      TreatMissingData: notBreaching
+
+  WebhookFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: src/webhook/
+      Handler: handler.handler
+      Description: Meta WhatsApp webhook (verify + enqueue)
+      Timeout: 10
+      MemorySize: 256
+      Environment:
+        Variables:
+          QUEUE_URL: !Ref WebhookQueue
+          SECRET_ARN: !Ref SecretArn
+      Policies:
+        - SQSSendMessagePolicy:
+            QueueName: !GetAtt WebhookQueue.QueueName
+        - Statement:
+            - Effect: Allow
+              Action:
+                - secretsmanager:GetSecretValue
+              Resource: !Ref SecretArn
+      FunctionUrlConfig:
+        AuthType: NONE
+        Cors:
+          AllowOrigins:
+            - "*"
+          AllowMethods:
+            - GET
+            - POST
+      Tags:
+        Component: webhook
+    Metadata:
+      BuildMethod: python3.12
+
+  WebhookLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub /aws/lambda/${WebhookFunction}
+      RetentionInDays: 30
+
+  WorkerFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: src/worker/
+      Handler: handler.handler
+      Description: Parse message, generate invoice PDF, send via WhatsApp
+      Timeout: 60
+      MemorySize: 512
+      Environment:
+        Variables:
+          QUEUE_URL: !Ref WebhookQueue
+          BUCKET_NAME: !Ref InvoiceBucket
+          TABLE_NAME: !Ref InvoiceTable
+          SECRET_ARN: !Ref SecretArn
+          PHONE_NUMBER_ID: !Ref PhoneNumberId
+          WABA_ID: !Ref WabaId
+          GRAPH_API_VERSION: !Ref GraphApiVersion
+          ALLOWED_SENDERS: !Ref AllowedSenders
+          INVOICE_START: !Ref InvoiceStart
+          QUOTATION_START: !Ref QuotationStart
+          LLM_PROVIDER: !Ref LlmProvider
+          OPENAI_MODEL: !Ref OpenAIModel
+          ANTHROPIC_MODEL: !Ref AnthropicModel
+      Policies:
+        - S3CrudPolicy:
+            BucketName: !Ref InvoiceBucket
+        - DynamoDBCrudPolicy:
+            TableName: !Ref InvoiceTable
+        - SQSPollerPolicy:
+            QueueName: !GetAtt WebhookQueue.QueueName
+        - Statement:
+            - Effect: Allow
+              Action:
+                - secretsmanager:GetSecretValue
+              Resource: !Ref SecretArn
+      Events:
+        QueueEvent:
+          Type: SQS
+          Properties:
+            Queue: !GetAtt WebhookQueue.Arn
+            BatchSize: 1
+            FunctionResponseTypes:
+              - ReportBatchItemFailures
+      Tags:
+        Component: worker
+    Metadata:
+      BuildMethod: python3.12
+
+  WorkerLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub /aws/lambda/${WorkerFunction}
+      RetentionInDays: 30
+
+Outputs:
+  WebhookUrl:
+    Description: Meta Callback URL (Function URL, AuthType NONE)
+    Value: !GetAtt WebhookFunctionUrl.FunctionUrl
+  WebhookQueueUrl:
+    Description: SQS queue URL
+    Value: !Ref WebhookQueue
+  WebhookDLQUrl:
+    Description: Dead-letter queue URL
+    Value: !Ref WebhookDLQ
+  InvoiceBucketName:
+    Description: Private S3 bucket for PDFs
+    Value: !Ref InvoiceBucket
+  InvoiceTableName:
+    Description: DynamoDB table name
+    Value: !Ref InvoiceTable
+  WorkerFunctionName:
+    Description: Worker Lambda name
+    Value: !Ref WorkerFunction
+  WebhookFunctionName:
+    Description: Webhook Lambda name
+    Value: !Ref WebhookFunction
+  WabaId:
+    Description: WABA ID (for subscribed_apps)
+    Value: !Ref WabaId

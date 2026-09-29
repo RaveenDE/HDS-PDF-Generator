@@ -1,0 +1,11 @@
+{
+  "invoice_no": "2577",
+  "date": "14/09/2026",
+  "customer": {"name": "DIMO Elevators (pvt) ltd", "address_lines": ["Colombo"]},
+  "attention": ["Mr. Hassan", "Mr. Abdulla"],
+  "site": "Same Place",
+  "items": [
+    {"description": "Door Jamb Installation", "unit": "No.s", "qty": 6, "rate": 75000},
+    {"description": "Door Jamb Modification", "unit": "No.s", "qty": 6, "rate": 9615, "total": 57690}
+  ]
+}

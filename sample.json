@@ -1,0 +1,28 @@
+{
+  "doc_type": "quotation",
+  "invoice_no": "26929",
+  "date": "29/09/2026",
+  "duration": "15 Days",
+  "customer": {"name": "Mr. Annaz", "address_lines": []},
+  "deliver_to": ["Alvis Place"],
+  "attention": [],
+  "subject": "SS Work",
+  "items": [
+    {
+      "description": "Stainless Steel Floor Grating 250mm Width 3mm Thick all Grade 316 SS Sheet Grating for Swimming pool Area (01 Glass 1400L x 1200H mm) All SS Brackets Grade 316",
+      "unit": "L Ft",
+      "qty": 36,
+      "rate": 11000
+    },
+    {
+      "description": "25 x 25 x 3mm Grade 316 'L' angle frame",
+      "unit": "L Ft",
+      "qty": 36,
+      "rate": 6000
+    }
+  ],
+  "transportation": 0,
+  "discount": 0,
+  "payment_terms": "Advance – 70% Up front balance after completion",
+  "notes": "This Quotation will valid only for 15 days."
+}

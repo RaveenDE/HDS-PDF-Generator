@@ -1,0 +1,12 @@
+__pycache__/
+.pytest_cache/
+.venv/
+venv/
+.aws-sam/
+*.pyc
+secrets.json
+.env
+dist/
+*.egg-info/
+.coverage
+htmlcov/

@@ -1,0 +1,9 @@
+reportlab==4.4.*
+pillow
+requests
+pydantic>=2.0,<3
+pytest>=8.0
+moto[dynamodb,s3,sqs,secretsmanager]>=5.0
+responses>=0.25
+boto3
+botocore

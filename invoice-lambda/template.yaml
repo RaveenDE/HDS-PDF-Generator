@@ -1,0 +1,14 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Transform: AWS::Serverless-2016-10-31
+
+Resources:
+  InvoiceFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      Runtime: python3.12
+      Handler: invoice.lambda_handler
+      MemorySize: 512
+      Timeout: 15
+      CodeUri: .
+      FunctionUrlConfig:
+        AuthType: AWS_IAM   # keep private; call it from your worker Lambda
