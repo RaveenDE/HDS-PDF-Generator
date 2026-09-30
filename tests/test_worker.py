@@ -243,6 +243,70 @@ def test_quotation_end_to_end(aws_env):
     assert doc_calls[0]["document"]["filename"] == "Quotation-26929.pdf"
 
 @responses.activate
+def test_balance_invoice_end_to_end(aws_env):
+    """Mr.Jegan-style balance invoice: job value − advance = 335,000."""
+    payload = {
+        "doc_type": "invoice",
+        "customer": {"name": "Mr.Jegan", "address_lines": ["Fonseka place"]},
+        "attention": ["Mr.Lalantha"],
+        "deliver_to": [],
+        "subject": "Elevator Exterior Cladding",
+        "items": [
+            {
+                "description": "Elevator Exterior Cladding",
+                "unit": "Job",
+                "qty": 1,
+                "rate": 1_092_500,
+            }
+        ],
+        "date": "30/09/2026",
+        "transportation": 0,
+        "discount": 0,
+        "advance": 757_500,
+        "advance_note": "500,000+218,500+39000",
+        "missing": [],
+    }
+    _mock_openai(payload)
+    responses.add(
+        responses.POST,
+        f"{GRAPH}/{PHONE_ID}/messages",
+        json={"messages": [{"id": "m"}]},
+        status=200,
+    )
+    responses.add(
+        responses.POST,
+        f"{GRAPH}/{PHONE_ID}/media",
+        json={"id": "media123"},
+        status=200,
+    )
+    result = worker.handler(
+        _sqs_event(
+            _wa_payload(
+                "30.09.2026 Invoice Mr.Jegan Fonseka place Attn Mr.Lalantha "
+                "Elevator Exterior Cladding Total job Value 1092500 "
+                "Advance (500000+218500+39000) 757500 Total Balance 335000",
+                wamid="wamid.BALANCE1",
+            )
+        ),
+        None,
+    )
+    assert result["batchItemFailures"] == []
+    s3 = boto3.client("s3", region_name="us-east-1")
+    obj = s3.get_object(Bucket="invoice-bucket", Key="invoices/2578.pdf")
+    assert obj["Body"].read().startswith(b"%PDF")
+    doc_calls = [
+        json.loads(c.request.body.decode())
+        for c in responses.calls
+        if c.request.url.endswith("/messages")
+        and c.request.body
+        and b'"type": "document"' in c.request.body
+    ]
+    assert doc_calls
+    assert "335,000.00" in doc_calls[0]["document"]["caption"]
+    assert "Balance" in doc_calls[0]["document"]["caption"]
+
+
+@responses.activate
 def test_duplicate_wamid_ignored(aws_env):
     claude = {
         "customer": {"name": "Acme", "address_lines": []},
@@ -460,6 +524,38 @@ def test_generate_invoice_bytes(aws_env):
             ],
             "transportation": 5000,
             "discount": 2000,
+        }
+    )
+    assert pdf.startswith(b"%PDF")
+
+
+def test_long_deliver_to_fits_in_box(aws_env):
+    """Deliver To with 3+ lines must expand the cell (no overflow)."""
+    from invoice import (
+        _info_cell_height,
+        _wrap_info_lines,
+        generate_invoice,
+    )
+
+    deliver = ["Hirdaramani Apparel", "Mihila", "Agalawatta"]
+    wrapped = _wrap_info_lines(deliver, 280)
+    assert len(wrapped) >= 3
+    assert _info_cell_height(wrapped, min_h=36) > 36
+
+    pdf = generate_invoice(
+        {
+            "doc_type": "invoice",
+            "invoice_no": "2581",
+            "date": "30/09/2026",
+            "customer": {
+                "name": "Asvida D Weerasinghe (Maintenance Manager)",
+                "address_lines": [],
+            },
+            "deliver_to": deliver,
+            "attention": ["Asvida D Weerasinghe"],
+            "items": [
+                {"description": "Maintenance work", "unit": "Job", "qty": 1, "rate": 10000}
+            ],
         }
     )
     assert pdf.startswith(b"%PDF")

@@ -135,6 +135,8 @@ def _create_and_send_invoice(parsed_dict: dict[str, Any], phone: str, wamid: str
         "items": parsed_dict["items"],
         "transportation": float(parsed_dict.get("transportation") or 0),
         "discount": float(parsed_dict.get("discount") or 0),
+        "advance": float(parsed_dict.get("advance") or 0),
+        "advance_note": parsed_dict.get("advance_note"),
         "payment_terms": parsed_dict.get("payment_terms"),
         "notes": parsed_dict.get("notes"),
     }
@@ -146,6 +148,7 @@ def _create_and_send_invoice(parsed_dict: dict[str, Any], phone: str, wamid: str
         data["items"],
         transportation=data["transportation"],
         discount=data["discount"],
+        advance=data["advance"],
     )
     bucket = os.environ["BUCKET_NAME"]
     folder = "quotations" if doc_type == "quotation" else "invoices"
@@ -169,7 +172,8 @@ def _create_and_send_invoice(parsed_dict: dict[str, Any], phone: str, wamid: str
 
     label = _doc_label(doc_type)
     filename = f"{label}-{doc_no}.pdf"
-    caption = f"{label} {doc_no} - Total Rs. {total:,.2f}"
+    amount_label = "Balance" if data["advance"] else "Total"
+    caption = f"{label} {doc_no} - {amount_label} Rs. {total:,.2f}"
     media_id = whatsapp.upload_media(pdf, filename)
     whatsapp.send_document(phone, media_id, filename=filename, caption=caption, wamid=wamid)
     info(

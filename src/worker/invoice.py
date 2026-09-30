@@ -44,14 +44,6 @@ CLOSING_RESERVE = 220
 # Continuation pages start table below the "Quotation (cont.)" / "INVOICE (cont.)" title
 CONT_TABLE_TOP = 190
 
-DEFAULT_PAYMENT_TERMS = "Advance – 70% Up front balance after completion"
-DEFAULT_NOTES_QUOTATION = (
-    "Please feel free to call us on any matter arising from the above.\n"
-    "This Quotation will valid only for 15 days."
-)
-DEFAULT_NOTES_INVOICE = "Please feel free to call us on any matter arising from the above."
-
-
 def X(px: float) -> float:
     return px * SX
 
@@ -106,13 +98,11 @@ def _doc_labels(doc_type: str) -> dict[str, str]:
             "title": "Quotation",
             "number_prefix": "Quotation ",
             "to_label": "Quote To",
-            "for_label": "Quotation for",
         }
     return {
         "title": "INVOICE",
         "number_prefix": "Inv No.",
         "to_label": "Invoice To",
-        "for_label": "Invoice for",
     }
 
 
@@ -130,13 +120,41 @@ def compute_grand_total(
     items: list[dict[str, Any]],
     transportation: float = 0,
     discount: float = 0,
+    advance: float = 0,
 ) -> float:
-    """Grand total = subtotal + transportation − discount."""
-    return compute_subtotal(items) + float(transportation or 0) - float(discount or 0)
+    """Balance due = subtotal + transportation − discount − advance."""
+    return (
+        compute_subtotal(items)
+        + float(transportation or 0)
+        - float(discount or 0)
+        - float(advance or 0)
+    )
 
 
 def default_invoice_date() -> str:
     return date.today().strftime("%d/%m/%Y")
+
+
+def _info_value_width(cell_width: float, label_w: float = 78) -> float:
+    return X(cell_width - label_w - 12)
+
+
+def _wrap_info_lines(value_lines: list[str], cell_width: float, *, max_lines: int = 6) -> list[str]:
+    width = _info_value_width(cell_width)
+    wrapped: list[str] = []
+    for raw in value_lines:
+        text = (raw or "").strip()
+        if not text:
+            continue
+        wrapped.extend(simpleSplit(text, FONT, 9, width))
+    if not wrapped:
+        return [""]
+    return wrapped[:max_lines]
+
+
+def _info_cell_height(value_lines: list[str], *, min_h: float = 24) -> float:
+    n = max(1, len(value_lines))
+    return max(min_h, 14 * n + 10)
 
 
 def _draw_info_cell(
@@ -158,7 +176,7 @@ def _draw_info_cell(
     c.rect(X(left + label_w), Y(top + height), X(width - label_w), height * SY, fill=0, stroke=1)
     draw_text(c, left + 4, top + 12, label, size=8)
     ty = top + 12
-    for line in value_lines[:4]:
+    for line in value_lines:
         draw_text(c, left + label_w + 5, ty, line, size=9)
         ty += 14
 
@@ -304,6 +322,7 @@ def _draw_closing(
     subtotal: float,
     transportation: float,
     discount: float,
+    advance: float,
     grand: float,
 ) -> None:
     def _summary_row(label: str, value: float, *, bold: bool = False) -> None:
@@ -333,49 +352,61 @@ def _draw_closing(
         top += tot_h
 
     _summary_row("Subtotal (Rs.)", subtotal)
-    _summary_row("Transportation", transportation)
-    _summary_row("Discount", discount)
-    _summary_row("Grand Total (Rs.)", grand, bold=True)
+    if transportation:
+        _summary_row("Transportation", transportation)
+    if discount:
+        _summary_row("Discount", discount)
+    if advance:
+        note = (data.get("advance_note") or "").strip()
+        adv_label = f"Advance ({note})" if note else "Advance"
+        _summary_row(adv_label, advance)
+        _summary_row("Total Balance (Rs.)", grand, bold=True)
+    else:
+        _summary_row("Grand Total (Rs.)", grand, bold=True)
 
-    payment = data.get("payment_terms") or DEFAULT_PAYMENT_TERMS
-    notes = data.get("notes")
-    if not notes:
-        notes = DEFAULT_NOTES_QUOTATION if doc_type == "quotation" else DEFAULT_NOTES_INVOICE
+    payment = (data.get("payment_terms") or "").strip()
+    notes = (data.get("notes") or "").strip()
+    content_bottom = top
 
-    # Wrap long payment terms
-    pay_lines = simpleSplit(str(payment), FONT, 9, X(TABLE_RIGHT - TABLE_LEFT - 10))
-    top += 14
-    draw_text(c, 85, top + 10, "Payment Terms", font=BOLD, size=9)
-    py = top + 26
-    for ln in pay_lines:
-        draw_text(c, 85, py, ln, size=9)
-        py += 12
+    if payment:
+        pay_lines = simpleSplit(payment, FONT, 9, X(TABLE_RIGHT - TABLE_LEFT - 10))
+        top += 14
+        draw_text(c, 85, top + 10, "Payment Terms", font=BOLD, size=9)
+        py = top + 26
+        for ln in pay_lines:
+            draw_text(c, 85, py, ln, size=9)
+            py += 12
+        content_bottom = py
+    else:
+        content_bottom = top + 8
 
-    notes_top = py + 10
-    note_lines: list[str] = []
-    for para in str(notes).split("\n"):
-        note_lines.extend(simpleSplit(para, FONT, 9, X(TABLE_RIGHT - TABLE_LEFT - 10)))
-    note_h = max(40, 14 * len(note_lines) + 16)
-    c.setFillColor(GREY)
-    c.rect(
-        X(TABLE_LEFT),
-        Y(notes_top + note_h),
-        X(TABLE_RIGHT - TABLE_LEFT),
-        note_h * SY,
-        fill=1,
-        stroke=1,
-    )
-    c.setFillColor(black)
-    draw_text(c, 90, notes_top + 12, "Notes", font=BOLD, size=9)
-    ny = notes_top + 26
-    for ln in note_lines:
-        draw_text(c, 90, ny, ln, size=8.5)
-        ny += 12
+    if notes:
+        notes_top = content_bottom + 10
+        note_lines: list[str] = []
+        for para in notes.split("\n"):
+            note_lines.extend(simpleSplit(para, FONT, 9, X(TABLE_RIGHT - TABLE_LEFT - 10)))
+        note_h = max(40, 14 * len(note_lines) + 16)
+        c.setFillColor(GREY)
+        c.rect(
+            X(TABLE_LEFT),
+            Y(notes_top + note_h),
+            X(TABLE_RIGHT - TABLE_LEFT),
+            note_h * SY,
+            fill=1,
+            stroke=1,
+        )
+        c.setFillColor(black)
+        draw_text(c, 90, notes_top + 12, "Notes", font=BOLD, size=9)
+        ny = notes_top + 26
+        for ln in note_lines:
+            draw_text(c, 90, ny, ln, size=8.5)
+            ny += 12
+        content_bottom = notes_top + note_h
 
-    sig_y = notes_top + note_h + 24
+    sig_y = content_bottom + 24
     # Keep signature above footer
     if sig_y + 110 > CONTENT_BOTTOM:
-        sig_y = max(notes_top + note_h + 16, CONTENT_BOTTOM - 110)
+        sig_y = max(content_bottom + 16, CONTENT_BOTTOM - 110)
 
     draw_text(c, 117, sig_y, "Thanking you,", size=10)
     draw_text(c, 117, sig_y + 16, "Yours Sincerely,", font=BOLD, size=10)
@@ -422,33 +453,34 @@ def generate_invoice(data: dict[str, Any]) -> bytes:
         deliver = [data["site"]]
     attention = data.get("attention") or []
     att_text = ", ".join(attention) if attention else ""
-    subject = data.get("subject") or ""
     duration = data.get("duration") or ""
     date_str = data.get("date") or default_invoice_date()
 
     left_x, right_x = 85, 380
     cell_w_l, cell_w_r = 280, 269
-    row1_h, row2_h = 48, 36
     top = 175
 
-    _draw_info_cell(c, left_x, top, cell_w_l, row1_h, labels["to_label"], cust_lines or [""])
-    _draw_info_cell(c, right_x, top, cell_w_r, row1_h / 2, "Date", [date_str])
+    cust_wrapped = _wrap_info_lines(cust_lines or [""], cell_w_l)
+    deliver_wrapped = _wrap_info_lines(deliver or [""], cell_w_l)
+    att_wrapped = _wrap_info_lines([att_text] if att_text else [""], cell_w_r)
+
+    # Right column: Date + Duration stacked; left Invoice To matches their combined height
+    date_h = duration_h = 24
+    row1_h = max(_info_cell_height(cust_wrapped, min_h=48), date_h + duration_h)
+    row2_h = max(
+        _info_cell_height(deliver_wrapped, min_h=36),
+        _info_cell_height(att_wrapped, min_h=36),
+    )
+
+    _draw_info_cell(c, left_x, top, cell_w_l, row1_h, labels["to_label"], cust_wrapped)
+    _draw_info_cell(c, right_x, top, cell_w_r, date_h, "Date", [date_str])
     _draw_info_cell(
-        c, right_x, top + row1_h / 2, cell_w_r, row1_h / 2, "Duration", [duration]
+        c, right_x, top + date_h, cell_w_r, row1_h - date_h, "Duration", [duration]
     )
 
     top2 = top + row1_h
-    _draw_info_cell(c, left_x, top2, cell_w_l, row2_h, "Deliver To", deliver or [""])
-    _draw_info_cell(c, right_x, top2, cell_w_r, row2_h / 2, "Attention", [att_text])
-    _draw_info_cell(
-        c,
-        right_x,
-        top2 + row2_h / 2,
-        cell_w_r,
-        row2_h / 2,
-        labels["for_label"],
-        [subject],
-    )
+    _draw_info_cell(c, left_x, top2, cell_w_l, row2_h, "Deliver To", deliver_wrapped)
+    _draw_info_cell(c, right_x, top2, cell_w_r, row2_h, "Attention", att_wrapped)
 
     top = _draw_table_header(c, top2 + row2_h + 12)
 
@@ -465,8 +497,9 @@ def generate_invoice(data: dict[str, Any]) -> bytes:
 
     transportation = float(data.get("transportation") or 0)
     discount = float(data.get("discount") or 0)
+    advance = float(data.get("advance") or 0)
     subtotal = compute_subtotal(items)
-    grand = subtotal + transportation - discount
+    grand = subtotal + transportation - discount - advance
 
     # Closing section needs space; otherwise start a fresh page
     if top + CLOSING_RESERVE > CONTENT_BOTTOM:
@@ -482,6 +515,7 @@ def generate_invoice(data: dict[str, Any]) -> bytes:
         subtotal=subtotal,
         transportation=transportation,
         discount=discount,
+        advance=advance,
         grand=grand,
     )
 

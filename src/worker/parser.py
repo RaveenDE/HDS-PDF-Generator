@@ -33,6 +33,8 @@ Schema:
   "date": string | null,
   "transportation": number,
   "discount": number,
+  "advance": number,
+  "advance_note": string | null,
   "payment_terms": string | null,
   "notes": string | null,
   "missing": string[]
@@ -43,19 +45,34 @@ Rules:
 - qty and rate must be positive numbers. Prefer integer qty when clear.
 - unit defaults to "No.s" if omitted.
 - total is optional; omit or null unless the user gave an explicit line total.
-- date: use DD/MM/YYYY only if the user specified a date; otherwise null.
-- deliver_to: delivery address lines ("deliver to", "delivery", "site"). Empty array if unknown.
-- subject: short job title for "Quotation for" / "Invoice for" (e.g. "SS Work"); null if unknown.
+- date: use DD/MM/YYYY (convert from DD.MM.YYYY if given); otherwise null.
+- customer.name: Invoice To / Quote To person or company. Keep titles/roles in the name
+  when given (e.g. "Asvida D Weerasinghe (Maintenance Manager)").
+- customer.address_lines: only postal/street lines for the customer; empty if none.
+- deliver_to: delivery/site address only ("deliver to", "delivery", "site"). Split
+  comma-separated places into separate lines
+  (e.g. "Hirdaramani Apparel, Mihila, Agalawatta" →
+  ["Hirdaramani Apparel", "Mihila", "Agalawatta"]). Never put the Invoice To name here.
+- subject: short job title if mentioned; null otherwise (not drawn on PDF).
 - duration: e.g. "15 Days" if mentioned; null otherwise.
-- attention: list of people names after "attention" / "attn" / similar.
-- transportation and discount: non-negative numbers; use 0 if not mentioned.
-- payment_terms / notes: only if the user stated them; otherwise null.
+- attention: people after "attention" / "attn" / "Attention to" / "Attn-".
+  May repeat the Invoice To person without the job title.
+- transportation and discount: non-negative numbers; use 0 if not mentioned
+  (omit from the PDF when 0 — do not invent amounts).
+- Balance / advance invoices (common pattern):
+  Example: "1) Elevator Exterior Cladding Total job Value 1092,500.00" then
+  "Advance (500,000+218,500+39000) 757,500.00" then "Total Balance 335,000.00".
+  Map as: one item with description = job name, unit="Job", qty=1, rate=job value
+  (or total=job value), advance = advance amount, advance_note = the parenthetical
+  breakdown if present (e.g. "500,000+218,500+39000"). Do NOT put Advance/Balance
+  as line items. Balance is computed as job_value - advance (after transport/discount).
+- payment_terms / notes: only if the user stated them; otherwise null
+  (never invent default payment terms or notes).
 - Items with sub-lines: the line that has qty/rate (e.g. "7 door panels at 50000") is description
   (title only — strip qty/rate from description). Following lines until the next priced item are
-  details[] bullet specs (e.g. "50mm dia SS Pipe Top Railing & Verticals"). Do not put details
-  into description. details may be [].
-- If customer name or at least one item (description + qty + rate) is missing, put short labels
-  in "missing" (e.g. ["customer.name", "items"]) and still fill what you can.
+  details[] bullet specs. details may be [].
+- If customer name or at least one item (description + qty + rate, or job value) is missing, put
+  short labels in "missing" and still fill what you can.
 - Phrases like "6 x 9615" or "6 @ 75000" or "7 door panels at 50000" mean qty + rate.
 - Do not invent customers or line items that were not mentioned.
 """
@@ -105,17 +122,19 @@ class ParsedInvoice(BaseModel):
     date: str | None = None
     transportation: float = 0
     discount: float = 0
+    advance: float = 0
+    advance_note: str | None = None
     payment_terms: str | None = None
     notes: str | None = None
     missing: list[str] = Field(default_factory=list)
     # Back-compat: older payloads used site
     site: str | None = None
 
-    @field_validator("transportation", "discount")
+    @field_validator("transportation", "discount", "advance")
     @classmethod
     def non_negative(cls, v: float) -> float:
         if v < 0:
-            raise ValueError("transportation and discount must be >= 0")
+            raise ValueError("amounts must be >= 0")
         return v
 
     @model_validator(mode="after")
@@ -170,6 +189,8 @@ class ParsedInvoice(BaseModel):
             "date": self.date,
             "transportation": self.transportation,
             "discount": self.discount,
+            "advance": self.advance,
+            "advance_note": self.advance_note,
             "payment_terms": self.payment_terms,
             "notes": self.notes,
         }
@@ -208,6 +229,8 @@ def merge_partial(existing: dict[str, Any] | None, new: ParsedInvoice) -> Parsed
     doc_type = new.doc_type or base.get("doc_type") or "invoice"
     transportation = new.transportation if new.transportation else base.get("transportation", 0)
     discount = new.discount if new.discount else base.get("discount", 0)
+    advance = new.advance if new.advance else base.get("advance", 0)
+    advance_note = new.advance_note if new.advance_note is not None else base.get("advance_note")
     payment_terms = new.payment_terms if new.payment_terms is not None else base.get("payment_terms")
     notes = new.notes if new.notes is not None else base.get("notes")
     return validate_parsed(
@@ -222,6 +245,8 @@ def merge_partial(existing: dict[str, Any] | None, new: ParsedInvoice) -> Parsed
             "date": date,
             "transportation": transportation or 0,
             "discount": discount or 0,
+            "advance": advance or 0,
+            "advance_note": advance_note,
             "payment_terms": payment_terms,
             "notes": notes,
             "missing": [],
@@ -249,7 +274,11 @@ def missing_prompt(parsed: ParsedInvoice) -> str:
         "7 door panels at 50000\n"
         "50mm dia SS Pipe Top Railing & Verticals\n"
         "10mm dia SS Cable & fixing accessory's\n"
-        "discount 20000"
+        "Example (balance invoice):\n"
+        "30.09.2026 Invoice Mr.Jegan, Fonseka place, Attn Mr.Lalantha\n"
+        "1) Elevator Exterior Cladding Total job Value 1092500\n"
+        "Advance (500000+218500+39000) 757500\n"
+        "Total Balance 335000"
     )
 
 

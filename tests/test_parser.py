@@ -235,6 +235,60 @@ def test_item_with_details_bullets():
     assert d["items"][0]["details"][0].startswith("50mm")
 
 
+def test_balance_invoice_jegan():
+    """Job value − advance = Total Balance (Mr.Jegan sample)."""
+    from invoice import compute_grand_total, generate_invoice
+
+    payload = {
+        "doc_type": "invoice",
+        "customer": {
+            "name": "Mr.Jegan",
+            "address_lines": ["Fonseka place"],
+        },
+        "attention": ["Mr.Lalantha"],
+        "deliver_to": [],
+        "subject": "Elevator Exterior Cladding",
+        "items": [
+            {
+                "description": "Elevator Exterior Cladding",
+                "details": [],
+                "unit": "Job",
+                "qty": 1,
+                "rate": 1_092_500,
+            }
+        ],
+        "date": "30/09/2026",
+        "transportation": 0,
+        "discount": 0,
+        "advance": 757_500,
+        "advance_note": "500,000+218,500+39000",
+        "missing": [],
+    }
+    parsed = validate_parsed(payload)
+    assert parsed.is_complete()
+    assert parsed.advance == 757_500
+    assert parsed.advance_note == "500,000+218,500+39000"
+    d = parsed.to_invoice_dict()
+    assert d["advance"] == 757_500
+
+    balance = compute_grand_total(
+        d["items"],
+        transportation=0,
+        discount=0,
+        advance=757_500,
+    )
+    assert balance == 335_000
+
+    pdf = generate_invoice(
+        {
+            **d,
+            "invoice_no": "2580",
+            "date": "30/09/2026",
+        }
+    )
+    assert pdf.startswith(b"%PDF")
+
+
 def test_pdf_renders_details(aws_env=None):
     from invoice import generate_invoice
 
@@ -278,6 +332,7 @@ def test_pdf_renders_details(aws_env=None):
     ]
     assert compute_subtotal(items) == 612_000
     assert compute_grand_total(items, transportation=5000, discount=2000) == 615_000
+    assert compute_grand_total(items, transportation=5000, discount=2000, advance=10000) == 605_000
     # Explicit line total override (sample style)
     items2 = [
         {"description": "A", "qty": 36, "rate": 11000},
