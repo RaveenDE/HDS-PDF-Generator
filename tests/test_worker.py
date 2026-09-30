@@ -463,3 +463,37 @@ def test_generate_invoice_bytes(aws_env):
         }
     )
     assert pdf.startswith(b"%PDF")
+
+
+def test_many_items_multipage(aws_env):
+    from invoice import generate_invoice
+
+    items = []
+    for n in range(1, 15):
+        items.append(
+            {
+                "description": f"Item {n}",
+                "details": [
+                    "50mm dia SS Pipe Top Railing & Verticals",
+                    "10mm dia SS Cable & fixing accessory's",
+                ],
+                "unit": "No.s",
+                "qty": 1,
+                "rate": 1000,
+            }
+        )
+    pdf = generate_invoice(
+        {
+            "doc_type": "quotation",
+            "invoice_no": "26938",
+            "date": "30/09/2026",
+            "customer": {"name": "DIMO Elevators", "address_lines": ["Colombo"]},
+            "deliver_to": ["Site A"],
+            "attention": ["Mr. Hassan"],
+            "items": items,
+            "discount": 20000,
+        }
+    )
+    assert pdf.startswith(b"%PDF")
+    # Multi-page: PDF should contain more than one /Type /Page
+    assert pdf.count(b"/Type /Page") >= 2 or pdf.count(b"/Type/Page") >= 2
