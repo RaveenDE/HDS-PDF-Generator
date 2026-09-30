@@ -439,8 +439,24 @@ def test_generate_invoice_bytes(aws_env):
             "attention": [],
             "subject": "SS Work",
             "items": [
-                {"description": "Door Jamb Installation", "unit": "No.s", "qty": 6, "rate": 75000},
-                {"description": "Door Jamb Modification", "unit": "No.s", "qty": 6, "rate": 9615, "total": 57690},
+                {
+                    "description": "S/S Hand Rail with 10 SS Cable",
+                    "details": [
+                        "50mm dia SS Pipe Top Railing & Verticals",
+                        "10mm dia SS Cable & fixing accessory's",
+                    ],
+                    "unit": "Lft",
+                    "qty": 27,
+                    "rate": 14000,
+                },
+                {
+                    "description": "Door Jamb Modification",
+                    "details": ["10mm Thick Tempered Glass"],
+                    "unit": "No.s",
+                    "qty": 6,
+                    "rate": 9615,
+                    "total": 57690,
+                },
             ],
             "transportation": 5000,
             "discount": 2000,

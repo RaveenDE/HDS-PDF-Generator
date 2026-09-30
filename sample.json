@@ -3,26 +3,34 @@
   "invoice_no": "26929",
   "date": "29/09/2026",
   "duration": "15 Days",
-  "customer": {"name": "Mr. Annaz", "address_lines": []},
-  "deliver_to": ["Alvis Place"],
-  "attention": [],
-  "subject": "SS Work",
+  "customer": {"name": "DIMO Elevators", "address_lines": ["Colombo"]},
+  "deliver_to": ["Site A"],
+  "attention": ["Mr. Hassan"],
+  "subject": "",
   "items": [
     {
-      "description": "Stainless Steel Floor Grating 250mm Width 3mm Thick all Grade 316 SS Sheet Grating for Swimming pool Area (01 Glass 1400L x 1200H mm) All SS Brackets Grade 316",
-      "unit": "L Ft",
-      "qty": 36,
-      "rate": 11000
+      "description": "S/S Hand Rail with 10 SS Cable",
+      "details": [
+        "50mm dia SS Pipe Top Railing & Verticals",
+        "10mm dia SS Cable & fixing accessory's"
+      ],
+      "unit": "Lft",
+      "qty": 7,
+      "rate": 50000
     },
     {
-      "description": "25 x 25 x 3mm Grade 316 'L' angle frame",
-      "unit": "L Ft",
-      "qty": 36,
-      "rate": 6000
+      "description": "Door jambs",
+      "details": [
+        "50mm dia SS Pipe Top Railing & Verticals",
+        "10mm dia SS Cable & fixing accessory's"
+      ],
+      "unit": "No.s",
+      "qty": 6,
+      "rate": 9615
     }
   ],
   "transportation": 0,
-  "discount": 0,
-  "payment_terms": "Advance – 70% Up front balance after completion",
-  "notes": "This Quotation will valid only for 15 days."
+  "discount": 20000,
+  "payment_terms": "Pay 50% advance first and the balance within ten days of delivery of the goods",
+  "notes": "Please feel to call us on any matter arising from the above. This Quotation will valid only for 3 days."
 }

@@ -207,7 +207,71 @@ def test_merge_partial_fills_items():
     assert len(merged.items) == 1
 
 
-def test_grand_total_math():
+def test_item_with_details_bullets():
+    parsed = validate_parsed(
+        {
+            "doc_type": "quotation",
+            "customer": {"name": "DIMO Elevators", "address_lines": ["Colombo"]},
+            "deliver_to": ["Site A"],
+            "items": [
+                {
+                    "description": "door panels",
+                    "details": [
+                        "50mm dia SS Pipe Top Railing & Verticals",
+                        "10mm dia SS Cable & fixing accessory's",
+                    ],
+                    "qty": 7,
+                    "rate": 50000,
+                }
+            ],
+            "discount": 20000,
+            "missing": [],
+        }
+    )
+    assert parsed.is_complete()
+    assert parsed.items[0].description == "door panels"
+    assert len(parsed.items[0].details) == 2
+    d = parsed.to_invoice_dict()
+    assert d["items"][0]["details"][0].startswith("50mm")
+
+
+def test_pdf_renders_details(aws_env=None):
+    from invoice import generate_invoice
+
+    pdf = generate_invoice(
+        {
+            "doc_type": "quotation",
+            "invoice_no": "26930",
+            "date": "30/09/2026",
+            "customer": {"name": "DIMO Elevators", "address_lines": ["Colombo"]},
+            "deliver_to": ["Site A"],
+            "attention": ["Mr. Hassan"],
+            "items": [
+                {
+                    "description": "door panels",
+                    "details": [
+                        "50mm dia SS Pipe Top Railing & Verticals",
+                        "10mm dia SS Cable & fixing accessory's",
+                    ],
+                    "unit": "No.s",
+                    "qty": 7,
+                    "rate": 50000,
+                },
+                {
+                    "description": "door jambs",
+                    "details": ["50mm dia SS Pipe Top Railing & Verticals"],
+                    "unit": "No.s",
+                    "qty": 6,
+                    "rate": 9615,
+                },
+            ],
+            "discount": 20000,
+            "payment_terms": "Pay 50% advance first and the balance within ten days of delivery",
+            "notes": "This Quotation will valid only for 3 days.",
+        }
+    )
+    assert pdf.startswith(b"%PDF")
+
     items = [
         {"description": "A", "qty": 36, "rate": 11000},
         {"description": "B", "qty": 36, "rate": 6000},

@@ -249,18 +249,28 @@ def generate_invoice(data: dict[str, Any]) -> bytes:
     top += header_h
 
     items = data.get("items") or []
+    desc_width = X(COLS["desc"][1] - COLS["desc"][0] - 12)
     for i, item in enumerate(items, start=1):
         line_total = item["qty"] * item["rate"]
         if item.get("total") is not None:
             line_total = item["total"]
 
-        desc_lines = simpleSplit(
-            item["description"],
-            FONT,
-            9.5,
-            X(COLS["desc"][1] - COLS["desc"][0] - 10),
-        )
-        row_h = max(36, 14 * len(desc_lines) + 18)
+        title = (item.get("description") or "").strip()
+        details = [d.strip() for d in (item.get("details") or []) if d and str(d).strip()]
+        # Back-compat: if description contains newlines, split into title + details
+        if "\n" in title and not details:
+            parts = [p.strip() for p in title.split("\n") if p.strip()]
+            title = parts[0] if parts else title
+            details = parts[1:]
+
+        title_lines = simpleSplit(title, BOLD, 9.5, desc_width)
+        detail_line_groups: list[list[str]] = []
+        for detail in details:
+            bullet = f"• {detail}"
+            detail_line_groups.append(simpleSplit(bullet, FONT, 9, desc_width - X(8)))
+
+        n_lines = len(title_lines) + sum(len(g) for g in detail_line_groups)
+        row_h = max(36, 14 * n_lines + 18)
         c.setFillColor(GREY)
         c.rect(
             X(TABLE_LEFT),
@@ -276,9 +286,25 @@ def generate_invoice(data: dict[str, Any]) -> bytes:
 
         ty = top + 14
         draw_text(c, COLS["id"][0] + 8, ty, f"{i:03d}")
-        for j, ln in enumerate(desc_lines):
-            c.setFont(FONT, 9.5)
-            c.drawString(X(COLS["desc"][0] + 5), Y(ty + j * 14), ln)
+
+        # Title: bold + underline
+        for j, ln in enumerate(title_lines):
+            c.setFont(BOLD, 9.5)
+            x0 = X(COLS["desc"][0] + 5)
+            y0 = Y(ty + j * 14)
+            c.drawString(x0, y0, ln)
+            c.setStrokeColor(black)
+            c.setLineWidth(0.5)
+            c.line(x0, y0 - 1.5, x0 + c.stringWidth(ln, BOLD, 9.5), y0 - 1.5)
+        ty_cursor = ty + 14 * len(title_lines)
+
+        # Bullet details
+        for group in detail_line_groups:
+            for ln in group:
+                c.setFont(FONT, 9)
+                c.drawString(X(COLS["desc"][0] + 10), Y(ty_cursor), ln)
+                ty_cursor += 14
+
         draw_text(
             c,
             (COLS["unit"][0] + COLS["unit"][1]) / 2,

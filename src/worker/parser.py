@@ -22,7 +22,14 @@ Schema:
   "attention": string[],
   "subject": string | null,
   "duration": string | null,
-  "items": [{"description": string, "unit": string, "qty": number, "rate": number, "total": number | null}],
+  "items": [{
+    "description": string,
+    "details": string[],
+    "unit": string,
+    "qty": number,
+    "rate": number,
+    "total": number | null
+  }],
   "date": string | null,
   "transportation": number,
   "discount": number,
@@ -43,9 +50,13 @@ Rules:
 - attention: list of people names after "attention" / "attn" / similar.
 - transportation and discount: non-negative numbers; use 0 if not mentioned.
 - payment_terms / notes: only if the user stated them; otherwise null.
+- Items with sub-lines: the line that has qty/rate (e.g. "7 door panels at 50000") is description
+  (title only — strip qty/rate from description). Following lines until the next priced item are
+  details[] bullet specs (e.g. "50mm dia SS Pipe Top Railing & Verticals"). Do not put details
+  into description. details may be [].
 - If customer name or at least one item (description + qty + rate) is missing, put short labels
   in "missing" (e.g. ["customer.name", "items"]) and still fill what you can.
-- Phrases like "6 x 9615" or "6 @ 75000" mean qty=6, rate=9615/75000.
+- Phrases like "6 x 9615" or "6 @ 75000" or "7 door panels at 50000" mean qty + rate.
 - Do not invent customers or line items that were not mentioned.
 """
 
@@ -57,6 +68,7 @@ class CustomerModel(BaseModel):
 
 class ItemModel(BaseModel):
     description: str
+    details: list[str] = Field(default_factory=list)
     unit: str = "No.s"
     qty: float
     rate: float
@@ -75,6 +87,11 @@ class ItemModel(BaseModel):
         if not v or not v.strip():
             raise ValueError("description required")
         return v.strip()
+
+    @field_validator("details")
+    @classmethod
+    def clean_details(cls, v: list[str]) -> list[str]:
+        return [d.strip() for d in v if d and str(d).strip()]
 
 
 class ParsedInvoice(BaseModel):
@@ -131,6 +148,7 @@ class ParsedInvoice(BaseModel):
         for it in self.items:
             d: dict[str, Any] = {
                 "description": it.description,
+                "details": list(it.details),
                 "unit": it.unit or "No.s",
                 "qty": int(it.qty) if float(it.qty).is_integer() else it.qty,
                 "rate": it.rate,
@@ -226,8 +244,12 @@ def missing_prompt(parsed: ParsedInvoice) -> str:
         "Example (invoice): Invoice DIMO Elevators, Colombo, deliver to Site A, "
         "attention Mr. Hassan, for door jambs, 6 door jamb installation at 75000, "
         "transport 5000, discount 2000\n"
-        "Example (quotation): Quotation Mr. Annaz, deliver to Alvis Place, "
-        "duration 15 Days, for SS Work, 36 L Ft grating at 11000"
+        "Example (quotation with specs):\n"
+        "Quotation DIMO Elevators, Colombo, deliver to Site A\n"
+        "7 door panels at 50000\n"
+        "50mm dia SS Pipe Top Railing & Verticals\n"
+        "10mm dia SS Cable & fixing accessory's\n"
+        "discount 20000"
     )
 
 

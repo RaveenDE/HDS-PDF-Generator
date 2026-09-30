@@ -22,10 +22,15 @@ from parser import (
 
 HELP_TEXT = (
     "Send an invoice or quotation request like:\n"
-    "Invoice DIMO Elevators, Colombo, deliver to Site A, attention Mr. Hassan, "
-    "for door jambs, 6 door jamb installation at 75000, transport 5000, discount 2000\n\n"
-    "Quotation Mr. Annaz, deliver to Alvis Place, duration 15 Days, for SS Work, "
-    "36 L Ft grating at 11000\n\n"
+    "Quotation DIMO Elevators, Colombo, deliver to Site A, attention Mr. Hassan\n"
+    "7 door panels at 50000\n"
+    "50mm dia SS Pipe Top Railing & Verticals\n"
+    "10mm dia SS Cable & fixing accessory's\n"
+    "6 door jambs at 9615\n"
+    "50mm dia SS Pipe...\n"
+    "discount 20000\n"
+    "Payment Term - Pay 50% advance...\n"
+    "Notes - Valid only for 3 days\n\n"
     "Commands: help | cancel | last invoice"
 )
 
